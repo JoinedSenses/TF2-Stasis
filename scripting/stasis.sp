@@ -82,6 +82,15 @@ public void OnMapStart() {
 		g_smProjectileAngles[i].Clear();
 		g_smProjectileVelocity[i].Clear();
 		g_smProjectileExplodeTime[i].Clear();
+
+		g_fStasisTick[i] = 0.0;
+		g_bStasis[i] = false;
+		g_iOldTick[i] = 0;
+
+		for (int j = 0; j < 3; j++) {
+			g_fNextAttack[i][j][0] = 0.0;
+			g_fNextAttack[i][j][1] = 0.0;
+		}
 	}
 }
 
