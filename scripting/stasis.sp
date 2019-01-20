@@ -23,7 +23,6 @@ enum {
 
 float g_vOrigin[MAXPLAYERS+1][3];
 float g_vVelocity[MAXPLAYERS+1][3];
-float g_vForwardVel[MAXPLAYERS+1][3];
 
 float g_fNextAttack[MAXPLAYERS+1][3][2];
 float g_fStasisTick[MAXPLAYERS+1];
@@ -159,22 +158,24 @@ public Action cmdStasis(int client, int args) {
 
 		float temp[3];
 		GetVectorAngles(g_vVelocity[client], temp);
-		GetAngleVectors(temp, g_vForwardVel[client], NULL_VECTOR, NULL_VECTOR);
-		ScaleVector(g_vForwardVel[client], GetVectorLength(g_vVelocity[client])*0.4);
+
+		float vForward[3];
+		GetAngleVectors(temp, vForward, NULL_VECTOR, NULL_VECTOR);
+		ScaleVector(vForward, GetVectorLength(vForward)*100.0);
 
 		GetClientAbsOrigin(client, g_vOrigin[client]);
-		AddVectors(g_vOrigin[client], g_vForwardVel[client], temp);
+		AddVectors(g_vOrigin[client], vForward, temp);
 
-		TE_SetupBeamPoints(g_vOrigin[client], temp, g_iBeamSprite, g_iHaloSprite, 0, 66, 10.0, 20.0, 20.0, 1, 1.0, {255, 255, 255, 255}, 0);
+		TE_SetupBeamPoints(g_vOrigin[client], temp, g_iBeamSprite, g_iHaloSprite, 0, 0, 10.0, 15.0, 15.0, 1, 1.0, {255, 255, 255, 255}, 0);
 		TE_SendToAll();
 
 		// Get eye angles and create laser
 		float vEyeAngles[3];
 		GetClientEyeAngles(client, vEyeAngles);
 
-		float vForward[3];
+		
 		GetAngleVectors(vEyeAngles, vForward, NULL_VECTOR, NULL_VECTOR);
-		ScaleVector(vForward, 100.0);
+		ScaleVector(vForward, 80.0);
 
 		float vEyepos[3];
 		GetClientEyePosition(client, vEyepos);
@@ -183,8 +184,10 @@ public Action cmdStasis(int client, int args) {
 		AddVectors(vEyepos, vForward, vEnd);
 
 		temp = vEyepos;
-		temp[2] -= 20.0;
-		TE_SetupBeamPoints(temp, vEnd, g_iBeamSprite, g_iHaloSprite, 0, 66, 10.0, 15.0, 15.0, 1, 1.0, {255, 50, 50, 255}, 0);
+		temp[2] -= 30.0;
+		TE_SetupBeamPoints(temp, vEnd, g_iBeamSprite, g_iHaloSprite, 0, 0, 10.0, 15.0, 15.0, 1, 1.0, {255, 20, 20, 255}, 0);
+		TE_SendToAll();
+		TE_SetupBeamPoints(vEyepos, vEnd, g_iBeamSprite, g_iHaloSprite, 0, 0, 10.0, 15.0, 15.0, 1, 1.0, {255, 20, 20, 255}, 0);
 		TE_SendToAll();
 
 		// Freeze client
@@ -257,7 +260,7 @@ public void frameSpawnRocket(int entity) {
 
 public void frameSpawnPipe(int entity) {
 	int owner = GetEntPropEnt(entity, Prop_Send, "m_hThrower");
-	if (!(0 < owner <= MaxClients) || !IsValidEntity(entity)) {
+	if (!(0 < owner <= MaxClients)) {
 		return;
 	}
 	// ArrayList of client's projectiles
@@ -282,6 +285,9 @@ public void frameSpawnPipe(int entity) {
 }
 
 public void OnEntityDestroyed(int entity) {
+	if (!IsValidEntity(entity)) {
+		return;
+	}
 	// Clear arrays/stringmaps when entity is destroyed
 	char classname[64];
 	GetEntityClassname(entity, classname, sizeof(classname));
@@ -365,13 +371,33 @@ void FreezeProjectilesPost(int client) {
 				float temp[3];
 				GetVectorAngles(velocity, temp);
 
-				float forwardvel[3];
-				GetAngleVectors(temp, forwardvel, NULL_VECTOR, NULL_VECTOR);
-				ScaleVector(forwardvel, GetVectorLength(forwardvel)*150.0);
+				float vForward[3];
+				float vUp[3];
+				float vRight[3];
+				GetAngleVectors(temp, vForward, vUp, vRight);
+				ScaleVector(vForward, GetVectorLength(vForward)*100.0);
+				ScaleVector(vUp, GetVectorLength(vUp)*15.0);
+				ScaleVector(vRight, GetVectorLength(vRight)*15.0);
 
-				AddVectors(origin, forwardvel, temp);
+				SubtractVectors(origin, vForward, temp);
 
 				TE_SetupBeamPoints(origin, temp, g_iBeamSprite, g_iHaloSprite, 0, 66, 10.0, 15.0, 15.0, 1, 1.0, {50, 50, 255, 255}, 0);
+				TE_SendToAll();
+
+				ZeroVector(temp);
+				float temp2[3];
+				AddVectors(origin, vUp, temp);
+				SubtractVectors(origin, vUp, temp2);
+
+				TE_SetupBeamPoints(temp2, temp, g_iBeamSprite, g_iHaloSprite, 0, 66, 10.0, 15.0, 15.0, 1, 1.0, {100, 50, 255, 255}, 0);
+				TE_SendToAll();
+
+				ZeroVector(temp);
+				ZeroVector(temp2);
+				AddVectors(origin, vRight, temp);
+				SubtractVectors(origin, vRight, temp2);
+
+				TE_SetupBeamPoints(temp, temp2, g_iBeamSprite, g_iHaloSprite, 0, 66, 10.0, 15.0, 15.0, 1, 1.0, {100, 50, 255, 255}, 0);
 				TE_SendToAll();
 				///////
 
