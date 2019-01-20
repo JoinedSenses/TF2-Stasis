@@ -251,7 +251,7 @@ public void OnEntityCreated(int entity, const char[] classname) {
 
 public void frameSpawnRocket(int entity) {
 	int owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
-	if (!(0 < owner <= MaxClients)) {
+	if (!(0 < owner <= MaxClients) || !CheckCommandAccess(owner, "sm_stasis", ADMFLAG_RESERVATION)) {
 		return;
 	}
 	// ArrayList of client's projectiles
@@ -275,6 +275,12 @@ public void frameSpawnPipe(int entity) {
 	// Store origin - used to calculate velocity during OnGameFrame
 	g_smProjectileOriginLastTick[owner].SetArray(sEntity, origin, sizeof(origin));
 
+	// Setting this check late to that the plugin can continue running the velocity calculation to support other
+	// plugins that might want to retrieve the information
+	if (!CheckCommandAccess(owner, "sm_stasis", ADMFLAG_RESERVATION)) {
+		return;
+	}
+
 	char classname[64];
 	GetEntityClassname(entity, classname, sizeof(classname));
 
@@ -295,7 +301,7 @@ public void OnEntityDestroyed(int entity) {
 	bool rocket;
 	if ((rocket = StrEqual(classname, "tf_projectile_rocket")) || StrContains(classname, "projectile_pipe") != -1) {
 		int owner = GetEntPropEnt(entity, Prop_Send, rocket ? "m_hOwnerEntity" : "m_hThrower");
-		if (!(0 < owner <= MaxClients)) {
+		if (!(0 < owner <= MaxClients)  || !CheckCommandAccess(owner, "sm_stasis", ADMFLAG_RESERVATION)) {
 			return;
 		}
 
