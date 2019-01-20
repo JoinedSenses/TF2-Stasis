@@ -146,6 +146,7 @@ public Action cmdStasis(int client, int args) {
 		PrintToChat(client, "Unsupported class");
 		return Plugin_Handled;
 	}
+
 	int slot1 = GetPlayerWeaponSlot(client,0);
 	int slot2 = GetPlayerWeaponSlot(client,1);
 	int slot3 = GetPlayerWeaponSlot(client,2);
@@ -177,11 +178,13 @@ public Action cmdStasis(int client, int args) {
 
 		float vEyepos[3];
 		GetClientEyePosition(client, vEyepos);
-		AddVectors(vEyepos, vForward, vEyepos);
+
+		float vEnd[3];
+		AddVectors(vEyepos, vForward, vEnd);
 
 		temp = vEyepos;
 		temp[2] -= 20.0;
-		TE_SetupBeamPoints(temp, vEyepos, g_iBeamSprite, g_iHaloSprite, 0, 66, 10.0, 20.0, 20.0, 1, 1.0, {255, 50, 50, 255}, 0);
+		TE_SetupBeamPoints(temp, vEnd, g_iBeamSprite, g_iHaloSprite, 0, 66, 10.0, 15.0, 15.0, 1, 1.0, {255, 50, 50, 255}, 0);
 		TE_SendToAll();
 
 		// Freeze client
