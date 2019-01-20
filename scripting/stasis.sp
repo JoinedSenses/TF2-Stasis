@@ -353,7 +353,13 @@ void FreezeProjectilesPost(int client) {
 					int remainingticks = PIPE_TICKS_UNTIL_EXPLODE - spentticks;
 					int newnextthink =  GetGameTickCount() + remainingticks;
 
+					//PrintToChatAll("Spawned: %i\nStasis tick: %i\nSpent ticks: %i\nRemaining ticks: %i\nNextThink tick: %i", tick, g_iOldTick[client], spentticks, remainingticks, newnextthink);
+
 					SetEntProp(entity, Prop_Data, "m_nNextThinkTick", newnextthink);
+
+					// Account for the delay from stasis
+					tick += GetGameTickCount()-g_iOldTick[client];
+					g_smProjectileExplodeTime[client].SetValue(sEntity, tick);
 				}
 			}
 			else {
