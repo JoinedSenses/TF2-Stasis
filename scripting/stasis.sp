@@ -284,7 +284,7 @@ public void frameSpawnPipe(int entity) {
 	// Store origin - used to calculate velocity during OnGameFrame
 	g_smProjectileOriginLastTick[owner].SetArray(sEntity, origin, sizeof(origin));
 
-	// Setting this check late to that the plugin can continue running the velocity calculation to support other
+	// Setting this check late so that the plugin can continue running the velocity calculation to support other
 	// plugins that might want to retrieve the information
 	if (!CheckCommandAccess(owner, "sm_stasis", ADMFLAG_RESERVATION)) {
 		return;
