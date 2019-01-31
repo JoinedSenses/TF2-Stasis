@@ -176,6 +176,7 @@ public void OnGameFrame() {
 			SetEntProp(entity, Prop_Data, "m_nNextThinkTick", tick+1);			
 		}
 
+		// Some dumb method of preventing vphysics entites from getting stuck in the air by keeping them "moving".
 		float fakevelocity[3] = {0.001, 0.001, 0.001};
 		TeleportEntity(entity, NULL_VECTOR, NULL_VECTOR, fakevelocity);
 	}
