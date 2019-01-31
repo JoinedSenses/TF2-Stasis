@@ -11,35 +11,6 @@
 #define PLUGIN_VERSION "1.0.0"
 #define PLUGIN_DESCRIPTION "Stasis: A state which does not change"
 
-enum {
-	PRIMARYATTACK,
-	SECONDARYATTACK
-}
-
-float g_vOrigin[MAXPLAYERS+1][3];
-float g_vVelocity[MAXPLAYERS+1][3];
-
-float g_fNextAttack[MAXPLAYERS+1][SLOTCOUNT][2];
-float g_fStasisTick[MAXPLAYERS+1];
-
-bool g_bStasis[MAXPLAYERS+1];
-
-int g_iBeamSprite;
-int g_iHaloSprite;
-
-ArrayList g_aProjectiles[MAXPLAYERS+1];
-ArrayList g_aVPhysicsEntities;
-
-StringMap g_smProjectileOrigin[MAXPLAYERS+1];
-StringMap g_smProjectileAngles[MAXPLAYERS+1];
-StringMap g_smProjectileVelocity[MAXPLAYERS+1];
-StringMap g_smProjectileMoveType[MAXPLAYERS+1];
-StringMap g_smProjectileExplodeTime[MAXPLAYERS+1];
-
-int g_iStasisButtons[MAXPLAYERS+1];
-
-int g_iOldTick[MAXPLAYERS+1];
-
 public Plugin myinfo = {
 	name = "Stasis",
 	author = "JoinedSenses",
@@ -47,6 +18,103 @@ public Plugin myinfo = {
 	version = PLUGIN_VERSION,
 	url = "http://github.com/JoinedSenses"
 };
+
+float g_vOrigin[MAXPLAYERS+1][3];
+float g_vVelocity[MAXPLAYERS+1][3];
+
+float g_fNextAttack[MAXPLAYERS+1][SLOTCOUNT][2];
+float g_fStasisTick[MAXPLAYERS+1];
+
+int g_iStasisButtons[MAXPLAYERS+1];
+int g_iPauseTick[MAXPLAYERS+1];
+
+bool g_bStasis[MAXPLAYERS+1];
+
+int g_iBeamSprite;
+int g_iHaloSprite;
+
+ArrayList g_aProjectiles[MAXPLAYERS+1];
+ArrayList g_aVPhysicsList;
+
+enum {
+	PRIMARYATTACK,
+	SECONDARYATTACK
+}
+
+enum struct Projectile {
+	int Entity;
+	int Owner;
+	bool IsNull;
+	float Origin[3];
+	float Angles[3];
+	float Velocity[3];
+	MoveType Movetype;
+	int ExplodeTime;
+
+	bool SetEntity(int entity) {
+		if (entity > MaxClients && IsValidEntity(entity)) {
+			this.Entity = entity;
+			return true;
+		}
+		return false;
+	}
+	int FindOwner() {
+		return (this.Owner = GetEntityOwner(this.Entity));
+	}
+	void Save() {
+		if (this.Entity > MaxClients && IsValidEntity(this.Entity) && IsValidOwner(this.Owner)) {
+			g_aProjectiles[this.Owner].PushArray(this);
+		}
+	}
+	void Delete() {
+		if (this.Entity <= MaxClients || !IsValidOwner(this.Owner)) {
+			return;
+		}
+		int index = g_aProjectiles[this.Owner].FindValue(this.Entity);
+		if (index != -1) {
+			g_aProjectiles[this.Owner].Erase(index);
+		}
+		index = g_aVPhysicsList.FindValue(this.Entity);
+		if (index != -1) {
+			g_aVPhysicsList.Erase(index);
+		}
+	}
+	void AddToVPhysicsList() {
+		if (this.Entity > MaxClients && IsValidEntity(this.Entity)) {
+			g_aVPhysicsList.PushArray(this);
+		}
+	}
+	void GetOrigin(float vec[3]) {
+		vec[0] = this.Origin[0];
+		vec[1] = this.Origin[1];
+		vec[2] = this.Origin[2];
+	}
+	void SetOrigin(float vec[3]) {
+		this.Origin[0] = vec[0];
+		this.Origin[1] = vec[1];
+		this.Origin[2] = vec[2];
+	}
+	void GetAngles(float vec[3]) {
+		vec[0] = this.Angles[0];
+		vec[1] = this.Angles[1];
+		vec[2] = this.Angles[2];
+	}
+	void SetAngles(float vec[3]) {
+		this.Angles[0] = vec[0];
+		this.Angles[1] = vec[1];
+		this.Angles[2] = vec[2];
+	}
+	void GetVelocity(float vec[3]) {
+		vec[0] = this.Velocity[0];
+		vec[1] = this.Velocity[1];
+		vec[2] = this.Velocity[2];
+	}
+	void SetVelocity(float vec[3]) {
+		this.Velocity[0] = vec[0];
+		this.Velocity[1] = vec[1];
+		this.Velocity[2] = vec[2];
+	}
+}
 
 // ================= SM API
 
@@ -60,15 +128,10 @@ public void OnPluginStart() {
 	HookEvent("player_death", eventPlayerStatusChange);
 	HookEvent("player_disconnect", eventPlayerStatusChange);
 
-	g_aVPhysicsEntities = new ArrayList(6);
+	g_aVPhysicsList = new ArrayList(sizeof(Projectile));
 
 	for (int i = 1; i <= MaxClients; i++) {
-		g_aProjectiles[i] = new ArrayList(6);
-		g_smProjectileOrigin[i] = new StringMap();
-		g_smProjectileAngles[i] = new StringMap();
-		g_smProjectileVelocity[i] = new StringMap();
-		g_smProjectileMoveType[i] = new StringMap();
-		g_smProjectileExplodeTime[i] = new StringMap();
+		g_aProjectiles[i] = new ArrayList(sizeof(Projectile));
 	}
 }
 
@@ -76,7 +139,7 @@ public void OnMapStart() {
 	g_iBeamSprite = PrecacheModel("sprites/laser.vmt", true);
 	g_iHaloSprite = PrecacheModel("sprites/halo01.vmt", true);
 
-	g_aVPhysicsEntities.Clear();
+	g_aVPhysicsList.Clear();
 
 	for (int i = 1; i <= MaxClients; i++) {
 		ResetValues(i);
@@ -93,33 +156,26 @@ public void OnPluginEnd() {
 }
 
 public void OnGameFrame() {
-	int entcount;
-	if (!(entcount = VPhysicsEntityCount())) {
+	int len = g_aVPhysicsList.Length;
+	if (!len) {
 		return;
 	}
-	// ArrayList of pipes/stickies
-	for (int i = 0; i < entcount; i++) {
-		int entity = GetVPhysicsEntityByIndex(i);
+	for (int i = 0; i < len; i++) {
+		Projectile p;
+		g_aVPhysicsList.GetArray(i, p, sizeof(Projectile));
 
-		if (!IsValidEntity(entity)) {
+		int entity = p.Entity;
+		int owner = p.Owner;
+
+		if (!IsValidEntity(entity) || !IsValidOwner(owner) || !IsClientInStasis(owner)) {
 			continue;
 		}
 
-		int owner = HasEntProp(entity, Prop_Send, "m_hThrower") ? GetEntPropEnt(entity, Prop_Send, "m_hThrower") : -1;
-		if (!IsValidClient(owner) || !IsClientInStasis(owner)) {
-			continue;
-		}
-
-		char sEntity[5];
-		Format(sEntity, sizeof(sEntity), "%i", entity);
-
-		// Checking if this is grenade-like entity
-		if (GetExplodeTime(owner, sEntity)) {
+		if (p.ExplodeTime) {
 			int tick = GetEntProp(entity, Prop_Data, "m_nNextThinkTick");
-			SetEntProp(entity, Prop_Data, "m_nNextThinkTick", tick+1);
+			SetEntProp(entity, Prop_Data, "m_nNextThinkTick", tick+1);			
 		}
 
-		// Some dumb method of preventing vphysics entites from getting stuck in the air by keeping them "moving".
 		float fakevelocity[3] = {0.001, 0.001, 0.001};
 		TeleportEntity(entity, NULL_VECTOR, NULL_VECTOR, fakevelocity);
 	}
@@ -196,25 +252,20 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 }
 
 public void OnEntityCreated(int entity, const char[] classname) {
-	// Requst game frame to retrieve information that isn't set yet.
-	if (StrContains(classname, "projectile_pipe") != -1 || StrContains(classname, "projectile_jar") != -1) {
-		RequestFrame(frameSpawnPipe, entity);
-		AddToVPhysicsList(entity);
-	}
-
-	else if (StrContains(classname, "tf_projectile") != -1 || StrEqual(classname, "prop_physics")) {
-		RequestFrame(frameSpawnRocket, entity);
+	if (StrContains(classname, "tf_projectile") != -1) {
+		DataPack dp = new DataPack();
+		dp.WriteCell(entity);
+		dp.WriteString(classname);
+		dp.Reset();
+		RequestFrame(frameProjectileSpawn, dp);
 	}
 }
 
 public void OnEntityDestroyed(int entity) {
-	if (!IsValidEntity(entity)) {
-		return;
-	}
-	// Clear arrays/stringmaps when entity is destroyed
-	int owner = GetEntityOwner(entity);
-	if (0 < owner <= MaxClients && CheckCommandAccess(owner, "sm_stasis", ADMFLAG_RESERVATION)) {
-		ClearEntity(owner, entity);
+	Projectile p;
+	p = FindProjectile(entity);
+	if (!p.IsNull) {
+		p.Delete();
 	}
 }
 
@@ -250,15 +301,10 @@ public Action cmdStasis(int client, int args) {
 
 void ResetValues(int client) {
 	g_aProjectiles[client].Clear();
-	g_smProjectileOrigin[client].Clear();
-	g_smProjectileAngles[client].Clear();
-	g_smProjectileVelocity[client].Clear();
-	g_smProjectileMoveType[client].Clear();
-	g_smProjectileExplodeTime[client].Clear();
 
 	g_bStasis[client] = false;
 	g_fStasisTick[client] = 0.0;
-	g_iOldTick[client] = 0;
+	g_iPauseTick[client] = 0;
 
 	for (int j = 0; j < 3; j++) {
 		g_fNextAttack[client][j][PRIMARYATTACK] = 0.0;
@@ -306,7 +352,7 @@ void FreezePlayer(int client) {
 
 	float vForward[3];
 	GetAngleVectors(temp, vForward, NULL_VECTOR, NULL_VECTOR);
-	ScaleVector(vForward, GetVectorLength(vForward)*100.0);
+	ScaleVector(vForward, GetVectorLength(g_vVelocity[client])*0.2);
 
 	GetClientAbsOrigin(client, g_vOrigin[client]);
 	AddVectors(g_vOrigin[client], vForward, temp);
@@ -399,58 +445,66 @@ void ResumeAttackForWeapon(int client, int weapon, int slot) {
 // -- Projectiles
 
 void FreezeProjectiles(int client) {
-	int count;
-	if (!(count = ClientProjectileCount(client))) {
+	int count = g_aProjectiles[client].Length;
+	if (!count) {
 		return;
 	}
 	for (int i = 0; i < count; i++) {
-		int entity = GetClientProjectileByIndex(client, i);
+		Projectile p;
+		g_aProjectiles[client].GetArray(i, p, sizeof(Projectile));
 
-		FreezeProjectile(client, entity);
+		if (!IsValidEntity(p.Entity)) {
+			p.Delete();
+			return;
+		}
+
+		FreezeProjectile(client, p);
+
+		// Variables changed - Update in array
+		g_aProjectiles[client].SetArray(i, p, sizeof(Projectile));
 	}
 
-	g_iOldTick[client] = GetGameTickCount();
+	g_iPauseTick[client] = GetGameTickCount();
 }
 
 void UnfreezeProjectiles(int client) {
-	int count;
-	if (!(count = ClientProjectileCount(client))) {
+	int count = g_aProjectiles[client].Length;
+	if (!count) {
 		return;
 	}
 	for (int i = 0; i < count; i++) {
-		int entity = GetClientProjectileByIndex(client, i);
+		Projectile p;
+		g_aProjectiles[client].GetArray(i, p, sizeof(Projectile));
 
-		if (!IsValidEntity(entity)) {
-			ClearEntity(client, entity);
+		if (!IsValidEntity(p.Entity)) {
+			p.Delete();
 			return;
 		}
-		UnfreezeProjectile(client, entity);
+
+		UnfreezeProjectile(client, p);
+
+		// Variables changed - Update in array
+		g_aProjectiles[client].SetArray(i, p, sizeof(Projectile));
 	}
 }
 
-void FreezeProjectile(int client, int entity) {
-	if (!IsValidEntity(entity)) {
-		ClearEntity(client, entity);
-		return;
-	}
-
-	char sEntity[5];
-	Format(sEntity, sizeof(sEntity), "%i", entity);
+void FreezeProjectile(int client, Projectile p) {
+	int entity = p.Entity;
 
 	float origin[3];
-	float angles[3];
-	float velocity[3];
-
 	Entity_GetAbsOrigin(entity, origin);
-	g_smProjectileOrigin[client].SetArray(sEntity, origin, sizeof(origin));
+	p.SetOrigin(origin);
 
+	float angles[3];
 	Entity_GetAbsAngles(entity, angles);
-	g_smProjectileAngles[client].SetArray(sEntity, angles, sizeof(angles));
+	p.SetAngles(angles);
 
+	float velocity[3];
 	Entity_GetAbsVelocity(entity, velocity);
-	g_smProjectileVelocity[client].SetArray(sEntity, velocity, sizeof(velocity));
+	p.SetVelocity(velocity);
 
-	g_smProjectileMoveType[client].SetValue(sEntity, GetEntityMoveType(entity));
+	p.Movetype = GetEntityMoveType(entity);
+
 	// Projectile velocity laser
 	float temp[3];
 	GetVectorAngles(velocity, temp);
@@ -460,7 +514,7 @@ void FreezeProjectile(int client, int entity) {
 	float vRight[3];
 	GetAngleVectors(temp, vForward, vUp, vRight);
 
-	ScaleVector(vForward, GetVectorLength(vForward)*100.0);
+	ScaleVector(vForward, GetVectorLength(velocity)*0.1);
 	SubtractVectors(origin, vForward, temp);
 	LaserBeam(client, origin, temp, 50, 50);
 
@@ -481,108 +535,39 @@ void FreezeProjectile(int client, int entity) {
 	///////
 
 	SetEntityMoveType(entity, MOVETYPE_NONE);
-	TeleportEntity(entity, NULL_VECTOR, NULL_VECTOR, ZeroVector());
+	//	TeleportEntity(entity, NULL_VECTOR, NULL_VECTOR, ZeroVector());
 }
 
-void UnfreezeProjectile(int client, int entity) {
-	char sEntity[5];
-	Format(sEntity, sizeof(sEntity), "%i", entity);
+void UnfreezeProjectile(int client, Projectile p) {
+	int entity = p.Entity;
+
+	MoveType movetype = p.Movetype;
+	SetEntityMoveType(entity, movetype);
 
 	float origin[3];
+	p.GetOrigin(origin);
+
 	float angles[3];
+	p.GetAngles(angles);
+
 	float velocity[3];
-	// EXIT STASIS
-
-	g_smProjectileOrigin[client].GetArray(sEntity, origin, sizeof(origin));
-	g_smProjectileAngles[client].GetArray(sEntity, angles, sizeof(angles));
-	g_smProjectileVelocity[client].GetArray(sEntity, velocity, sizeof(velocity));
-
-
-	//char classname[64];
-	//GetEntityClassname(entity, classname, sizeof(classname));
-
-	MoveType movetype;
-	g_smProjectileMoveType[client].GetValue(sEntity, movetype);
-
-	SetEntityMoveType(entity, movetype);
+	p.GetVelocity(velocity);
+	
 	TeleportEntity(entity, origin, angles, velocity);
 
-	int tick;
-	bool result = GetExplodeTime(client, sEntity, tick);
-
-	if (result) {
+	int tick = p.ExplodeTime;
+	if (tick) {
 		// Calculate nextthink for pipe lifespan
-		int spentticks = g_iOldTick[client] - tick;
+		int spentticks = g_iPauseTick[client] - tick;
 		int remainingticks = PIPE_TICKS_UNTIL_EXPLODE - spentticks;
 		int newnextthink =  GetGameTickCount() + remainingticks;
 
 		SetEntProp(entity, Prop_Data, "m_nNextThinkTick", newnextthink);
 
-		//PrintToChatAll(
-		//	    "Spawned: %i\n"
-		//	... "Stasis tick: %i\n"
-		//	... "Spent ticks: %i\n"
-		//	... "Remaining ticks: %i\n"
-		//	... "NextThink tick: %i"
-		//	, tick, g_iOldTick[client], spentticks, remainingticks, newnextthink
-		//);
-
 		// Account for the delay from stasis
-		tick += GetGameTickCount()-g_iOldTick[client];
-		SetExplodeTime(client, sEntity, tick);
+		tick += GetGameTickCount()-g_iPauseTick[client];
+		p.ExplodeTime = tick;
 	}
-}
-
-// -- Projectile Entities
-
-int ClientProjectileCount(int client) {
-	return g_aProjectiles[client].Length;
-}
-
-int GetClientProjectileByIndex(int client, int index) {
-	return g_aProjectiles[client].Get(index);
-}
-
-int FindClientProjectileIndex(int client, int entity) {
-	return g_aProjectiles[client].FindValue(entity);
-}
-
-void RemoveClientProjectileByIndex(int client, int index) {
-	g_aProjectiles[client].Erase(index);
-}
-
-void AddToClientProjectileList(int client, int entity) {
-	g_aProjectiles[client].Push(entity);
-}
-
-// -- VPhysics Entities
-
-void AddToVPhysicsList(int entity) {
-	g_aVPhysicsEntities.Push(entity);
-}
-
-int FindVPhysicsEntityIndex(int entity) {
-	return g_aVPhysicsEntities.FindValue(entity);
-}
-
-int GetVPhysicsEntityByIndex(int index) {
-	return g_aVPhysicsEntities.Get(index);
-}
-
-void RemoveVPhysicsEntityByIndex(int index) {
-	g_aVPhysicsEntities.Erase(index);
-}
-
-int VPhysicsEntityCount() {
-	return g_aVPhysicsEntities.Length;
-}
-
-void SetExplodeTime(int client, const char[] entity, int tick) {
-	g_smProjectileExplodeTime[client].SetValue(entity, tick);
-}
-
-bool GetExplodeTime(int client, const char[] entity, int &tick = 0) {
-	return g_smProjectileExplodeTime[client].GetValue(entity, tick);
 }
 
 // -- Entity
@@ -608,26 +593,36 @@ int GetEntityOwner(int entity) {
 	return owner;
 }
 
-void ClearEntity(int owner, int entity) {
-	int index;
-	if ((index = FindClientProjectileIndex(owner, entity)) != -1) {
-		RemoveClientProjectileByIndex(owner, index);
-	}
-	if ((index = FindVPhysicsEntityIndex(entity)) != -1) {
-		RemoveVPhysicsEntityByIndex(index);
+int[] FindProjectile(int entity) {
+	Projectile p;
+	int owner = GetEntityOwner(entity);
+	if (!IsValidOwner(owner)) {
+		p.IsNull = true;
+		return p;
 	}
 
-	char sEntity[5];
-	Format(sEntity, sizeof(sEntity), "%i", entity);
+	int len;
+	if (!(len = g_aProjectiles[owner].Length)) {
+		p.IsNull = true;
+		return p;
+	}
+	
+	for (int i = 0; i < len; i++) {
+		g_aProjectiles[owner].GetArray(i, p, sizeof(p));
+		if (p.Owner == owner) {
+			return p;
+		}
+	}
 
-	g_smProjectileOrigin[owner].Remove(sEntity);
-	g_smProjectileAngles[owner].Remove(sEntity);
-	g_smProjectileVelocity[owner].Remove(sEntity);
-	g_smProjectileMoveType[owner].Remove(sEntity);
-	g_smProjectileExplodeTime[owner].Remove(sEntity);
+	p.IsNull = true;
+	return p;
 }
 
 // -- Misc/Stocks
+
+bool IsValidOwner(int owner) {
+	return 0 < owner <= MaxClients;
+}
 
 void LaserBeam(int client, float start[3], float end[3], int r = 255, int g = 255, int b = 255, int a = 255) {
 	int color[4];
@@ -680,37 +675,26 @@ float[] ZeroVector(float vec[3] = {0.0, 0.0, 0.0}) {
 
 // ================= Timers/Frame Requests
 
-void frameSpawnRocket(int entity) {
-	if (!IsValidEntity(entity)) {
-		return;
-	}
-	int owner = GetEntityOwner(entity);
-	if (!(0 < owner <= MaxClients) || !CheckCommandAccess(owner, "sm_stasis", ADMFLAG_RESERVATION)) {
-		return;
-	}
-	// ArrayList of client's projectiles
-	AddToClientProjectileList(owner, entity);
-}
+void frameProjectileSpawn(DataPack dp) {
+	int entity = dp.ReadCell();
 
-void frameSpawnPipe(int entity) {
-	if (!IsValidEntity(entity)) {
+	Projectile p;
+	if (!p.SetEntity(entity) || !p.FindOwner()) {
 		return;
 	}
-	int owner = GetEntityOwner(entity);
-	if (!(0 < owner <= MaxClients) || !CheckCommandAccess(owner, "sm_stasis", ADMFLAG_RESERVATION)) {
-		return;
-	}
-	// ArrayList of client's projectiles
-	AddToClientProjectileList(owner, entity);
-
-	char sEntity[5];
-	Format(sEntity, sizeof(sEntity), "%i", entity);
 
 	char classname[64];
-	GetEntityClassname(entity, classname, sizeof(classname));
+	dp.ReadString(classname, sizeof(classname));
+	delete dp;
 
 	if (StrEqual(classname, "tf_projectile_pipe") || StrContains(classname, "projectile_jar") != -1) {
 		// Get tick count of spawn - used to perform calculations for lifespan
-		SetExplodeTime(owner, sEntity, GetGameTickCount());
+		p.ExplodeTime = GetGameTickCount();
+		p.AddToVPhysicsList();
 	}
+	else if (StrEqual(classname, "tf_projectile_pipe_remote")) {
+		p.AddToVPhysicsList();
+	}
+
+	p.Save();
 }
