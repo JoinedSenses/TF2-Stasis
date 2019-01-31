@@ -297,13 +297,14 @@ enum struct Projectile {
 		this.GetAngles(angles);
 
 		float velocity[3];
-		this.GetAngles(velocity);
+		this.GetVelocity(velocity);
 
 		TeleportEntity(entity, origin, angles, velocity);
 
 		this.UpdateExplodeTime();
 	}
 	void DisplayLasers() {
+		// TODO: FIX
 		float origin[3];
 		this.GetVelocity(origin);
 		float velocity[3];
@@ -369,10 +370,6 @@ public void OnPluginStart() {
 
 	for (int i = 1; i <= MaxClients; i++) {
 		g_aProjectiles[i] = new ArrayList(sizeof(Projectile));
-
-		if (IsValidClient(i)) {
-			player[i].Client = i;
-		}
 	}
 }
 
@@ -476,6 +473,7 @@ public Action cmdStasis(int client, int args) {
 void ResetValues(int client) {
 	g_aProjectiles[client].Clear();
 	player[client] = DEFAULTSTATUS;
+	player[client].Client = client;
 }
 
 bool IsValidClient(int client) {
