@@ -423,8 +423,8 @@ public void OnEntityCreated(int entity, const char[] classname) {
 void frameProjectileSpawn(DataPack dp) {
 	int entity = dp.ReadCell();
 
-	Projectile p;
-	if (!p.SetEntity(entity) || !p.FindOwner() || !CheckCommandAccess(p.Owner, "sm_stasis", ADMFLAG_RESERVATION)) {
+	Projectile projectile;
+	if (!projectile.SetEntity(entity) || !projectile.FindOwner() || !CheckCommandAccess(projectile.Owner, "sm_stasis", ADMFLAG_RESERVATION)) {
 		return;
 	}
 
@@ -434,21 +434,21 @@ void frameProjectileSpawn(DataPack dp) {
 
 	if (StrEqual(classname, "tf_projectile_pipe") || StrContains(classname, "projectile_jar") != -1) {
 		// Get tick count of spawn - used to perform calculations for lifespan
-		p.ExplodeTime = GetGameTickCount();
-		p.AddToVPhysicsList();
+		projectile.ExplodeTime = GetGameTickCount();
+		projectile.AddToVPhysicsList();
 	}
 	else if (StrEqual(classname, "tf_projectile_pipe_remote")) {
-		p.AddToVPhysicsList();
+		projectile.AddToVPhysicsList();
 	}
 
-	p.Save();
+	projectile.Save();
 }
 
 public void OnEntityDestroyed(int entity) {
-	Projectile p;
-	p = FindProjectile(entity);
-	if (!p.IsNull) {
-		p.Delete();
+	Projectile projectile;
+	projectile = FindProjectile(entity);
+	if (!projectile.IsNull) {
+		projectile.Delete();
 	}
 }
 
@@ -498,19 +498,19 @@ void FreezeProjectiles(int client) {
 		return;
 	}
 	for (int i = 0; i < count; i++) {
-		Projectile p;
-		g_aProjectiles[client].GetArray(i, p, sizeof(Projectile));
+		Projectile projectile;
+		g_aProjectiles[client].GetArray(i, projectile, sizeof(Projectile));
 
-		if (!IsValidEntity(p.Entity)) {
-			p.Delete();
+		if (!IsValidEntity(projectile.Entity)) {
+			projectile.Delete();
 			return;
 		}
 
-		p.Freeze();
-		p.DisplayLasers();
+		projectile.Freeze();
+		projectile.DisplayLasers();
 
 		// Variables changed - Update in array
-		g_aProjectiles[client].SetArray(i, p, sizeof(Projectile));
+		g_aProjectiles[client].SetArray(i, projectile, sizeof(Projectile));
 	}
 
 	player[client].PauseTick = GetGameTickCount();
@@ -522,18 +522,18 @@ void UnfreezeProjectiles(int client) {
 		return;
 	}
 	for (int i = 0; i < count; i++) {
-		Projectile p;
-		g_aProjectiles[client].GetArray(i, p, sizeof(Projectile));
+		Projectile projectile;
+		g_aProjectiles[client].GetArray(i, projectile, sizeof(Projectile));
 
-		if (!IsValidEntity(p.Entity)) {
-			p.Delete();
+		if (!IsValidEntity(projectile.Entity)) {
+			projectile.Delete();
 			return;
 		}
 
-		p.Unfreeze();
+		projectile.Unfreeze();
 
 		// Variables changed - Update in array
-		g_aProjectiles[client].SetArray(i, p, sizeof(Projectile));
+		g_aProjectiles[client].SetArray(i, projectile, sizeof(Projectile));
 	}
 }
 
@@ -562,28 +562,28 @@ int GetEntityOwner(int entity) {
 }
 
 int[] FindProjectile(int entity) {
-	Projectile p;
+	Projectile projectile;
 	int owner = GetEntityOwner(entity);
 	if (!IsValidOwner(owner)) {
-		p.IsNull = true;
-		return p;
+		projectile.IsNull = true;
+		return projectile;
 	}
 
 	int len;
 	if (!(len = g_aProjectiles[owner].Length)) {
-		p.IsNull = true;
-		return p;
+		projectile.IsNull = true;
+		return projectile;
 	}
 	
 	for (int i = 0; i < len; i++) {
-		g_aProjectiles[owner].GetArray(i, p, sizeof(p));
-		if (p.Owner == owner) {
-			return p;
+		g_aProjectiles[owner].GetArray(i, projectile, sizeof(projectile));
+		if (projectile.Owner == owner) {
+			return projectile;
 		}
 	}
 
-	p.IsNull = true;
-	return p;
+	projectile.IsNull = true;
+	return projectile;
 }
 
 // -- Misc/Stocks
@@ -633,17 +633,17 @@ public void OnGameFrame() {
 		return;
 	}
 	for (int i = 0; i < len; i++) {
-		Projectile p;
-		g_aVPhysicsList.GetArray(i, p, sizeof(Projectile));
+		Projectile projectile;
+		g_aVPhysicsList.GetArray(i, projectile, sizeof(Projectile));
 
-		int entity = p.Entity;
-		int owner = p.Owner;
+		int entity = projectile.Entity;
+		int owner = projectile.Owner;
 
 		if (!IsValidEntity(entity) || !IsValidOwner(owner) || !IsClientInStasis(owner)) {
 			continue;
 		}
 
-		if (p.ExplodeTime) {
+		if (projectile.ExplodeTime) {
 			int tick = GetEntProp(entity, Prop_Data, "m_nNextThinkTick");
 			SetEntProp(entity, Prop_Data, "m_nNextThinkTick", tick+1);			
 		}
