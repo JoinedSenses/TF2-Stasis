@@ -282,8 +282,7 @@ enum struct Projectile {
 
 		this.Movetype = GetEntityMoveType(entity);
 
-		SetEntityMoveType(this.Entity, MOVETYPE_NONE);
-		//	TeleportEntity(this.Entity, NULL_VECTOR, NULL_VECTOR, ZeroVector());	
+		SetEntityMoveType(this.Entity, MOVETYPE_NONE);	
 	}
 	void Unfreeze() {
 		int entity = this.Entity;
@@ -304,9 +303,8 @@ enum struct Projectile {
 		this.UpdateExplodeTime();
 	}
 	void DisplayLasers() {
-		// TODO: FIX
 		float origin[3];
-		this.GetVelocity(origin);
+		this.GetOrigin(origin);
 		float velocity[3];
 		this.GetVelocity(velocity);
 
