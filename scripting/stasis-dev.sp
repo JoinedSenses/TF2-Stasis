@@ -1,3 +1,7 @@
+/*
+ * This version requires SM 1.10 due to it using enum structs
+ */
+
 #pragma newdecls required
 #pragma semicolon 1
 
@@ -8,7 +12,7 @@
 
 #define PIPE_TICKS_UNTIL_EXPLODE 145
 #define SLOTCOUNT 3
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.0.0-dev"
 #define PLUGIN_DESCRIPTION "Stasis: A state which does not change"
 
 public Plugin myinfo = {
