@@ -658,7 +658,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	Action action = Plugin_Continue;
 	switch (TF2_GetPlayerClass(client)) {
 		case TFClass_Soldier, TFClass_Medic: {
-			return Plugin_Continue;
+			buttons &= ~IN_ATTACK;
+			return Plugin_Changed;
 		}
 		case TFClass_DemoMan: {
 			int playerweapon;
