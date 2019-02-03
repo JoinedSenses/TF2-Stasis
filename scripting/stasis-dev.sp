@@ -131,7 +131,7 @@ enum struct Player {
 				this.NextAttackSecondary[slot] = GetEntPropFloat(weapon, Prop_Send, "m_flNextSecondaryAttack");
 				SetEntPropFloat(weapon, Prop_Send, "m_flNextSecondaryAttack", 999999999.0);
 			}
-		}		
+		}
 	}
 
 	void ResumeAttack() {
@@ -424,6 +424,7 @@ void frameProjectileSpawn(DataPack dp) {
 
 	Projectile projectile;
 	if (!projectile.SetEntity(entity) || !projectile.FindOwner() || !CheckCommandAccess(projectile.Owner, "sm_stasis", ADMFLAG_RESERVATION)) {
+		delete dp;
 		return;
 	}
 
