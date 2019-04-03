@@ -31,11 +31,6 @@ Handle g_hCleanupTimer[MAXPLAYERS+1];
 int g_iBeamSprite;
 int g_iHaloSprite;
 
-enum {
-	PRIMARYATTACK,
-	SECONDARYATTACK
-}
-
 enum struct Player {
 	int Client;
 	float Origin[3];
@@ -125,6 +120,7 @@ enum struct Player {
 			if (!IsValidEntity(weapon)) {
 				return;
 			}
+
 			if (HasEntProp(weapon, Prop_Send, "m_flNextPrimaryAttack")) {
 				this.NextAttackPrimary[slot] = GetEntPropFloat(weapon, Prop_Send, "m_flNextPrimaryAttack");
 				SetEntPropFloat(weapon, Prop_Send, "m_flNextPrimaryAttack", 999999999.0);
@@ -141,6 +137,7 @@ enum struct Player {
 			if (!IsValidEntity(weapon)) {
 				return;
 			}
+			
 			if (HasEntProp(weapon, Prop_Send, "m_flNextPrimaryAttack")) {
 				SetEntPropFloat(
 					  weapon
