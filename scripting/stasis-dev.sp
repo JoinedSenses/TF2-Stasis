@@ -26,6 +26,8 @@ public Plugin myinfo = {
 ArrayList g_aProjectiles[MAXPLAYERS+1];
 ArrayList g_aVPhysicsList;
 
+Handle g_hCleanupTimer[MAXPLAYERS+1];
+
 int g_iBeamSprite;
 int g_iHaloSprite;
 
@@ -387,14 +389,21 @@ public void OnMapStart() {
 }
 
 public void OnClientConnected(int client) {
-	if (CheckCommandAccess(client, "sm_stasis", ADMFLAG_RESERVATION)) {
+	if (!IsFakeClient(client) && CheckCommandAccess(client, "sm_stasis", ADMFLAG_RESERVATION)) {
 		player[client].Client = client;
+
+		g_hCleanupTimer[client] = CreateTimer(15.0, timerCleanup, GetClientUserId(client), TIMER_REPEAT);
 	}
 }
 
-public Action eventPlayerStatusChange(Event event, const char[] name, bool dontBroadcast) {
+public void OnClientDisconnect(int client) {
+	delete g_hCleanupTimer[client];
+}
+
+public void eventPlayerStatusChange(Event event, const char[] name, bool dontBroadcast) {
 	int client = GetClientOfUserId(event.GetInt("userid"));
-	if (client && CheckCommandAccess(client, "sm_stasis", ADMFLAG_RESERVATION)) {
+
+	if (client && !IsFakeClient(client) && CheckCommandAccess(client, "sm_stasis", ADMFLAG_RESERVATION)) {
 		ResetValues(client);
 	}
 }
@@ -471,6 +480,38 @@ public Action cmdStasis(int client, int args) {
 }
 
 // ================= Internal Functions
+
+// -- Timer
+
+Action timerCleanup(Handle timer, any data) {
+	// Cleanup to check for valid projectiles
+	int client = GetClientOfUserId(data);
+
+	if (!client) {
+		return Plugin_Stop;
+	}
+
+	if (!g_aProjectiles[client].Length) {
+		return Plugin_Continue;
+	}
+
+	for (int i = 0; i < g_aProjectiles[client].Length; i++) {
+		Projectile projectile;
+		g_aProjectiles[client].GetArray(i, projectile, sizeof(Projectile));
+
+		int entity = projectile.Entity;
+
+		char classname[32];
+		GetEntityClassname(entity, classname, sizeof(classname));
+
+
+		if (!IsValidEntity(entity) || StrContains(classname, "tf_projectile") == -1) {
+			g_aProjectiles[client].Erase(i--);
+		}
+	}
+
+	return Plugin_Continue;
+}
 
 // -- Client
 
