@@ -133,7 +133,6 @@ enum struct Player {
 			}
 		}
 	}
-
 	void ResumeAttack() {
 		for (int slot = 0; slot < SLOTCOUNT; slot++) {
 			int weapon = GetPlayerWeaponSlot(this.Client, slot);
@@ -309,6 +308,7 @@ enum struct Projectile {
 	void DisplayLasers() {
 		float origin[3];
 		this.GetOrigin(origin);
+
 		float velocity[3];
 		this.GetVelocity(velocity);
 
@@ -447,6 +447,7 @@ void frameProjectileSpawn(DataPack dp) {
 public void OnEntityDestroyed(int entity) {
 	Projectile projectile;
 	projectile = FindProjectile(entity);
+
 	if (!projectile.IsNull) {
 		projectile.Delete();
 	}
@@ -522,6 +523,7 @@ void UnfreezeProjectiles(int client) {
 	if (!count) {
 		return;
 	}
+
 	for (int i = 0; i < count; i++) {
 		Projectile projectile;
 		g_aProjectiles[client].GetArray(i, projectile, sizeof(Projectile));
@@ -549,12 +551,15 @@ int GetEntityOwner(int entity) {
 	if (HasEntProp(entity, Prop_Send, "m_hThrower")) {
 		owner = GetEntPropEnt(entity, Prop_Send, "m_hThrower");
 	}
+
 	if (!owner && HasEntProp(entity, Prop_Send, "m_hOwnerEntity")) {
 		owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
 	}
+
 	if (!owner) {
 		return 0;
 	}
+
 	if (owner > MaxClients && HasEntProp(owner, Prop_Send, "m_hBuilder")) {
 		owner = GetEntPropEnt(owner, Prop_Send, "m_hBuilder");
 	}
@@ -562,7 +567,7 @@ int GetEntityOwner(int entity) {
 	return owner;
 }
 
-int[] FindProjectile(int entity) {
+any[] FindProjectile(int entity) {
 	Projectile projectile;
 	int owner = GetEntityOwner(entity);
 	if (!IsValidOwner(owner)) {
@@ -633,6 +638,7 @@ public void OnGameFrame() {
 	if (!len) {
 		return;
 	}
+	
 	for (int i = 0; i < len; i++) {
 		Projectile projectile;
 		g_aVPhysicsList.GetArray(i, projectile, sizeof(Projectile));
@@ -646,7 +652,7 @@ public void OnGameFrame() {
 
 		if (projectile.ExplodeTime) {
 			int tick = GetEntProp(entity, Prop_Data, "m_nNextThinkTick");
-			SetEntProp(entity, Prop_Data, "m_nNextThinkTick", tick+1);			
+			SetEntProp(entity, Prop_Data, "m_nNextThinkTick", tick+1);
 		}
 
 		// Some dumb method of preventing vphysics entites from getting stuck in the air by keeping them "moving".
