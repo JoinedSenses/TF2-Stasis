@@ -385,6 +385,10 @@ public void OnMapStart() {
 
 	for (int i = 1; i <= MaxClients; i++) {
 		ResetValues(i);
+
+		if (IsValidClient(i) && CheckCommandAccess(i, "sm_stasis", ADMFLAG_RESERVATION)) {
+			g_hCleanupTimer[i] = CreateTimer(15.0, timerCleanup, GetClientUserId(i), TIMER_REPEAT);
+		}
 	}
 }
 
@@ -522,7 +526,7 @@ void ResetValues(int client) {
 }
 
 bool IsValidClient(int client) {
-	return ((0 < client <= MaxClients) && IsClientInGame(client));
+	return ((0 < client <= MaxClients) && IsClientInGame(client) && !IsFakeClient(client));
 }
 
 bool IsValidOwner(int owner) {
