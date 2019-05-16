@@ -5,3 +5,5 @@ An experimental plugin which holds players in a stasis-like state. It is current
 
 ## Commands
 `sm_stasis`
+
+### Required: calcvel.smx
