@@ -12,7 +12,7 @@
 
 #define PIPE_TICKS_UNTIL_EXPLODE 145
 #define SLOTCOUNT 3
-#define PLUGIN_VERSION "1.0.2-dev"
+#define PLUGIN_VERSION "1.0.3-dev"
 #define PLUGIN_DESCRIPTION "Stasis: A state which does not change"
 
 public Plugin myinfo = {
@@ -42,30 +42,6 @@ enum struct Player {
 	int buttons;
 	bool isInStasis;
 
-	void getOrigin(float vec[3]) {
-		vec[0] = this.origin[0];
-		vec[1] = this.origin[1];
-		vec[2] = this.origin[2];
-	}
-
-	void setOrigin(float vec[3]) {
-		this.origin[0] = vec[0];
-		this.origin[1] = vec[1];
-		this.origin[2] = vec[2];
-	}
-
-	void getVelocity(float vec[3]) {
-		vec[0] = this.velocity[0];
-		vec[1] = this.velocity[1];
-		vec[2] = this.velocity[2];
-	}
-
-	void setVelocity(float vec[3]) {
-		this.velocity[0] = vec[0];
-		this.velocity[1] = vec[1];
-		this.velocity[2] = vec[2];
-	}
-
 	void toggleStasis() {
 		if (!this.isInStasis) {
 			this.enableStasis();
@@ -93,13 +69,9 @@ enum struct Player {
 
 		freezeProjectiles(client);
 
-		float origin[3];
-		GetClientAbsOrigin(client, origin);
-		this.setOrigin(origin);
+		GetClientAbsOrigin(client, this.origin);
 
-		float velocity[3];
-		getClientAbsVelocity(client, velocity);
-		this.setVelocity(velocity);
+		getClientAbsVelocity(client, this.velocity);
 
 		SetEntityMoveType(client, MOVETYPE_NONE);
 
@@ -114,13 +86,7 @@ enum struct Player {
 
 		SetEntityMoveType(client, MOVETYPE_WALK);
 
-		float origin[3];
-		this.getOrigin(origin);
-
-		float velocity[3];
-		this.getVelocity(velocity);
-
-		TeleportEntity(client, origin, NULL_VECTOR, velocity);	
+		TeleportEntity(client, this.origin, NULL_VECTOR, this.velocity);	
 	}
 
 	void pauseAttack() {
@@ -171,26 +137,20 @@ enum struct Player {
 	void displayLasers() {
 		int client = this.client;
 
-		float origin[3];
-		this.getOrigin(origin);
-
 		float angles[3];
 		GetClientEyeAngles(client, angles);
-
-		float velocity[3];
-		this.getVelocity(velocity);
 
 		float eyepos[3];
 		GetClientEyePosition(client, eyepos);
 
 		float temp[3];
-		GetVectorAngles(velocity, temp);
+		GetVectorAngles(this.velocity, temp);
 
 		float fwrd[3];
 		GetAngleVectors(temp, fwrd, NULL_VECTOR, NULL_VECTOR);
-		ScaleVector(fwrd, GetVectorLength(velocity)*0.2);
-		AddVectors(origin, fwrd, temp);
-		doLaserBeam(client, origin, temp);
+		ScaleVector(fwrd, GetVectorLength(this.velocity)*0.2);
+		AddVectors(this.origin, fwrd, temp);
+		doLaserBeam(client, this.origin, temp);
 
 		GetAngleVectors(angles, fwrd, NULL_VECTOR, NULL_VECTOR);
 		ScaleVector(fwrd, 80.0);
@@ -256,54 +216,12 @@ enum struct Projectile {
 		}
 	}
 
-	void getOrigin(float vec[3]) {
-		vec[0] = this.origin[0];
-		vec[1] = this.origin[1];
-		vec[2] = this.origin[2];
-	}
-
-	void setOrigin(float vec[3]) {
-		this.origin[0] = vec[0];
-		this.origin[1] = vec[1];
-		this.origin[2] = vec[2];
-	}
-
-	void getAngles(float vec[3]) {
-		vec[0] = this.angles[0];
-		vec[1] = this.angles[1];
-		vec[2] = this.angles[2];
-	}
-
-	void setAngles(float vec[3]) {
-		this.angles[0] = vec[0];
-		this.angles[1] = vec[1];
-		this.angles[2] = vec[2];
-	}
-
-	void getVelocity(float vec[3]) {
-		vec[0] = this.velocity[0];
-		vec[1] = this.velocity[1];
-		vec[2] = this.velocity[2];
-	}
-
-	void setVelocity(float vec[3]) {
-		this.velocity[0] = vec[0];
-		this.velocity[1] = vec[1];
-		this.velocity[2] = vec[2];
-	}
-
 	void freeze() {
 		int entity = this.entity;
 
-		float temp[3];
-		GetEntPropVector(entity, Prop_Send, "m_vecOrigin", temp);
-		this.setOrigin(temp);
-
-		GetEntPropVector(entity, Prop_Data, "m_angAbsRotation", temp);
-		this.setAngles(temp);
-
-		GetEntPropVector(entity, Prop_Data, "m_vecAbsVelocity", temp);
-		this.setVelocity(temp);
+		GetEntPropVector(entity, Prop_Send, "m_vecOrigin", this.origin);
+		GetEntPropVector(entity, Prop_Data, "m_angAbsRotation", this.angles);
+		GetEntPropVector(entity, Prop_Data, "m_vecAbsVelocity", this.velocity);
 
 		this.moveType = GetEntityMoveType(entity);
 
@@ -315,53 +233,38 @@ enum struct Projectile {
 
 		SetEntityMoveType(entity, this.moveType);
 
-		float origin[3];
-		this.getOrigin(origin);
-
-		float angles[3];
-		this.getAngles(angles);
-
-		float velocity[3];
-		this.getVelocity(velocity);
-
-		TeleportEntity(entity, origin, angles, velocity);
+		TeleportEntity(entity, this.origin, this.angles, this.velocity);
 
 		this.updateExplodeTime();
 	}
 
 	void displayLasers() {
-		float origin[3];
-		this.getOrigin(origin);
-
-		float velocity[3];
-		this.getVelocity(velocity);
-
 		int owner = this.owner;
 
 		float temp[3];
-		GetVectorAngles(velocity, temp);
+		GetVectorAngles(this.velocity, temp);
 
 		float fwrd[3];
 		float up[3];
 		float right[3];
 		GetAngleVectors(temp, fwrd, up, right);
 
-		ScaleVector(fwrd, GetVectorLength(velocity)*0.1);
-		SubtractVectors(origin, fwrd, temp);
-		doLaserBeam(owner, origin, temp, 50, 50);
+		ScaleVector(fwrd, GetVectorLength(this.velocity)*0.1);
+		SubtractVectors(this.origin, fwrd, temp);
+		doLaserBeam(owner, this.origin, temp, 50, 50);
 
 		zeroVector(temp);
 		ScaleVector(up, 15.0);
-		AddVectors(origin, up, temp);
+		AddVectors(this.origin, up, temp);
 		float temp2[3];
-		SubtractVectors(origin, up, temp2);
+		SubtractVectors(this.origin, up, temp2);
 		doLaserBeam(owner, temp2, temp, 100, 50);
 
 		zeroVector(temp);
 		zeroVector(temp2);
 		ScaleVector(right, 15.0);
-		AddVectors(origin, right, temp);
-		SubtractVectors(origin, right, temp2);
+		AddVectors(this.origin, right, temp);
+		SubtractVectors(this.origin, right, temp2);
 		doLaserBeam(owner, temp, temp2, 100, 50);
 	}
 
@@ -518,9 +421,8 @@ Action timerCleanup(Handle timer, int userid) {
 		return Plugin_Stop;
 	}
 
-	int len = g_aProjectiles[client].Length;
-	if (len) {
-		for (int i = 0; i < len; i++) {
+	if (g_aProjectiles[client].Length) {
+		for (int i = 0; i < g_aProjectiles[client].Length; i++) {
 			Projectile projectile;
 			g_aProjectiles[client].GetArray(i, projectile, sizeof(Projectile));
 
@@ -540,9 +442,8 @@ Action timerCleanup(Handle timer, int userid) {
 		}
 	}
 
-	len = g_aVPhysicsList.Length;
-	if (len) {
-		for (int i = 0; i < len; i++) {
+	if (g_aVPhysicsList.Length) {
+		for (int i = 0; i < g_aVPhysicsList.Length; i++) {
 			Projectile projectile;
 			g_aVPhysicsList.GetArray(i, projectile, sizeof(Projectile));
 
