@@ -253,15 +253,12 @@ enum struct Projectile {
 		SubtractVectors(this.origin, fwrd, temp);
 		doLaserBeam(owner, this.origin, temp, 50, 50);
 
-		zeroVector(temp);
 		ScaleVector(up, 15.0);
 		AddVectors(this.origin, up, temp);
 		float temp2[3];
 		SubtractVectors(this.origin, up, temp2);
 		doLaserBeam(owner, temp2, temp, 100, 50);
 
-		zeroVector(temp);
-		zeroVector(temp2);
 		ScaleVector(right, 15.0);
 		AddVectors(this.origin, right, temp);
 		SubtractVectors(this.origin, right, temp2);
@@ -612,17 +609,12 @@ bool getClientAbsVelocity(int client, float velocity[3]) {
 	static int offset = -1;
 	
 	if (offset == -1 && (offset = FindDataMapInfo(client, "m_vecAbsVelocity")) == -1) {
-		zeroVector(velocity);
+		velocity = NULL_VECTOR;
 		return false;
 	}
 	
 	GetEntDataVector(client, offset, velocity);
 	return true;
-}
-
-float[] zeroVector(float vec[3] = NULL_VECTOR) {
-	vec[0] = vec[1] = vec[2] = 0.0;
-	return vec;
 }
 
 // ================= Game Frame Logic
