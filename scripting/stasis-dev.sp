@@ -561,7 +561,7 @@ int getEntityOwner(int entity) {
 	return owner;
 }
 
-any[] findProjectile(int entity) {
+any findProjectile(int entity) {
 	Projectile projectile;
 	int owner = getEntityOwner(entity);
 	if (!isValidOwner(owner)) {
