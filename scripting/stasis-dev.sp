@@ -140,8 +140,8 @@ enum struct Player {
 		float angles[3];
 		GetClientEyeAngles(client, angles);
 
-		float eyepos[3];
-		GetClientEyePosition(client, eyepos);
+		float eyePos[3];
+		GetClientEyePosition(client, eyePos);
 
 		float temp[3];
 		GetVectorAngles(this.velocity, temp);
@@ -156,10 +156,10 @@ enum struct Player {
 		ScaleVector(fwrd, 80.0);
 
 		float end[3];
-		AddVectors(eyepos, fwrd, end);
-		doLaserBeam(client, eyepos, end, 255, 20, 20);
+		AddVectors(eyePos, fwrd, end);
+		doLaserBeam(client, eyePos, end, 255, 20, 20);
 
-		temp = eyepos;
+		temp = eyePos;
 		temp[2] -= 30.0;
 		doLaserBeam(client, temp, end, 255, 20, 20);
 	}
@@ -269,11 +269,11 @@ enum struct Projectile {
 		int tick = this.explodeTime;
 		if (tick) {
 			int owner = this.owner;
-			int spentticks = player[owner].pauseTick - tick;
-			int remainingticks = PIPE_TICKS_UNTIL_EXPLODE - spentticks;
-			int newnextthink = GetGameTickCount() + remainingticks;
+			int spentTicks = player[owner].pauseTick - tick;
+			int remainingTicks = PIPE_TICKS_UNTIL_EXPLODE - spentTicks;
+			int newNextThink = GetGameTickCount() + remainingTicks;
 
-			SetEntProp(this.entity, Prop_Data, "m_nNextThinkTick", newnextthink);
+			SetEntProp(this.entity, Prop_Data, "m_nNextThinkTick", newNextThink);
 
 			tick += GetGameTickCount() - player[owner].pauseTick;
 			this.explodeTime = tick;
@@ -427,7 +427,7 @@ Action timerCleanup(Handle timer, int userid) {
 
 			if (!IsValidEntity(entity)) {
 				g_aProjectiles[client].Erase(i--);
-				return Plugin_Continue;
+				continue;
 			}
 
 			char classname[32];
@@ -448,7 +448,7 @@ Action timerCleanup(Handle timer, int userid) {
 
 			if (!IsValidEntity(entity)) {
 				g_aVPhysicsList.Erase(i--);
-				return Plugin_Continue;
+				continue;
 			}
 
 			char classname[32];
