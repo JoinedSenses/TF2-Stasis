@@ -12,8 +12,9 @@
 
 #define PIPE_TICKS_UNTIL_EXPLODE 145
 #define SLOTCOUNT 3
-#define PLUGIN_VERSION "1.0.3-dev"
+#define PLUGIN_VERSION "2.0.0-dev"
 #define PLUGIN_DESCRIPTION "Stasis: A state which does not change"
+#define MAX_NET_ENTS 2048
 
 public Plugin myinfo = {
 	name = "Stasis",
@@ -26,13 +27,11 @@ public Plugin myinfo = {
 ArrayList g_aProjectiles[MAXPLAYERS+1];
 ArrayList g_aVPhysicsList;
 
-Handle g_hCleanupTimer[MAXPLAYERS+1];
-
 int g_iBeamSprite;
 int g_iHaloSprite;
 
 enum struct Player {
-	int client;
+	int userID;
 	float origin[3];
 	float velocity[3];
 	float nextAttackPrimary[SLOTCOUNT];
@@ -41,6 +40,14 @@ enum struct Player {
 	int pauseTick;
 	int buttons;
 	bool isInStasis;
+
+	int get() {
+		return GetClientOfUserId(this.userID);
+	}
+
+	void set(int client) {
+		this.userID = isValidClient(client) ? GetClientUserId(client) : 0;
+	}
 
 	void toggleStasis() {
 		if (!this.isInStasis) {
@@ -65,7 +72,10 @@ enum struct Player {
 	}
 
 	void freeze() {
-		int client = this.client;
+		int client = this.get();
+		if (!client) {
+			return;
+		}
 
 		freezeProjectiles(client);
 
@@ -77,10 +87,14 @@ enum struct Player {
 
 		this.stasisTick = GetGameTime();
 		this.buttons = GetClientButtons(client);
+		this.pauseTick = GetGameTickCount();
 	}
 
 	void unfreeze() {
-		int client = this.client;
+		int client = this.get();
+		if (!client) {
+			return;
+		}
 
 		unfreezeProjectiles(client);
 
@@ -90,8 +104,13 @@ enum struct Player {
 	}
 
 	void pauseAttack() {
+		int client = this.get();
+		if (!client) {
+			return;
+		}
+
 		for (int slot = 0; slot < SLOTCOUNT; slot++) {
-			int weapon = GetPlayerWeaponSlot(this.client, slot);
+			int weapon = GetPlayerWeaponSlot(client, slot);
 			if (!IsValidEntity(weapon)) {
 				return;
 			}
@@ -109,8 +128,13 @@ enum struct Player {
 	}
 
 	void resumeAttack() {
+		int client = this.get();
+		if (!client) {
+			return;
+		}
+
 		for (int slot = 0; slot < SLOTCOUNT; slot++) {
-			int weapon = GetPlayerWeaponSlot(this.client, slot);
+			int weapon = GetPlayerWeaponSlot(client, slot);
 			if (!IsValidEntity(weapon)) {
 				return;
 			}
@@ -135,7 +159,10 @@ enum struct Player {
 	}
 
 	void displayLasers() {
-		int client = this.client;
+		int client = this.get();
+		if (!client) {
+			return;
+		}
 
 		float angles[3];
 		GetClientEyeAngles(client, angles);
@@ -165,59 +192,67 @@ enum struct Player {
 	}
 }
 
-Player player[MAXPLAYERS+1], DEFAULTSTATUS;
+Player player[MAXPLAYERS+1];
+
+Player[] defaultPlayer(int client) {
+	Player p;
+	p.set(client);
+	return p;
+}
 
 enum struct Projectile {
-	int entity;
-	int owner;
-	bool isNull;
+	int entRef;
+	int ownerUserID;
 	float origin[3];
 	float angles[3];
 	float velocity[3];
 	MoveType moveType;
 	int explodeTime;
 
+	int getEntity() {
+		return EntRefToEntIndex(this.entRef);
+	}
+
 	bool setEntity(int entity) {
-		if (entity > MaxClients && IsValidEntity(entity)) {
-			this.entity = entity;
+		if (MaxClients < entity <= MAX_NET_ENTS && IsValidEntity(entity)) {
+			this.entRef = EntIndexToEntRef(entity);
 			return true;
 		}
 		return false;
 	}
 
-	int findOwner() {
-		return (this.owner = getEntityOwner(this.entity));
+	int getOwner() {
+		return GetClientOfUserId(this.ownerUserID);
+	}
+
+	bool setOwner(int client) {
+		if (isValidClient(client) && CheckCommandAccess(client, "sm_stasis", ADMFLAG_RESERVATION)) {
+			this.ownerUserID = GetClientUserId(client);
+			return true;
+		}
+		return false;
 	}
 
 	void save() {
-		if (this.entity > MaxClients && IsValidEntity(this.entity) && isValidOwner(this.owner)) {
-			g_aProjectiles[this.owner].PushArray(this);
-		}
-	}
-
-	void remove() {
-		if (this.entity <= MaxClients || !isValidOwner(this.owner)) {
-			return;
-		}
-
-		int index = g_aProjectiles[this.owner].FindValue(this.entity);
-		if (index != -1) {
-			g_aProjectiles[this.owner].Erase(index);
-		}
-		index = g_aVPhysicsList.FindValue(this.entity);
-		if (index != -1) {
-			g_aVPhysicsList.Erase(index);
+		if (this.getEntity()) {
+			int owner = this.getOwner();	
+			if (isValidOwner(owner)) {
+				g_aProjectiles[owner].PushArray(this);
+			}
 		}
 	}
 
 	void addToVPhysicsList() {
-		if (this.entity > MaxClients && IsValidEntity(this.entity)) {
+		if (this.getEntity()) {
 			g_aVPhysicsList.PushArray(this);
 		}
 	}
 
 	void freeze() {
-		int entity = this.entity;
+		int entity = this.getEntity();
+		if (!entity) {
+			return;
+		}
 
 		GetEntPropVector(entity, Prop_Send, "m_vecOrigin", this.origin);
 		GetEntPropVector(entity, Prop_Data, "m_angAbsRotation", this.angles);
@@ -225,11 +260,14 @@ enum struct Projectile {
 
 		this.moveType = GetEntityMoveType(entity);
 
-		SetEntityMoveType(this.entity, MOVETYPE_NONE);	
+		SetEntityMoveType(entity, MOVETYPE_NONE);	
 	}
 
 	void unfreeze() {
-		int entity = this.entity;
+		int entity = this.getEntity();
+		if (!entity) {
+			return;
+		}
 
 		SetEntityMoveType(entity, this.moveType);
 
@@ -239,7 +277,10 @@ enum struct Projectile {
 	}
 
 	void displayLasers() {
-		int owner = this.owner;
+		int owner = this.getOwner();
+		if (!isValidOwner(owner)) {
+			return;
+		}
 
 		float temp[3];
 		GetVectorAngles(this.velocity, temp);
@@ -266,17 +307,24 @@ enum struct Projectile {
 	}
 
 	void updateExplodeTime() {
+		int entity = this.getEntity();
+		if (!entity) {
+			return;
+		}
+
 		int tick = this.explodeTime;
 		if (tick) {
-			int owner = this.owner;
-			int spentTicks = player[owner].pauseTick - tick;
-			int remainingTicks = PIPE_TICKS_UNTIL_EXPLODE - spentTicks;
-			int newNextThink = GetGameTickCount() + remainingTicks;
+			int owner = this.getOwner();
+			if (owner) {
+				int spentTicks = player[owner].pauseTick - tick;
+				int remainingTicks = PIPE_TICKS_UNTIL_EXPLODE - spentTicks;
+				int newNextThink = GetGameTickCount() + remainingTicks;
 
-			SetEntProp(this.entity, Prop_Data, "m_nNextThinkTick", newNextThink);
+				SetEntProp(entity, Prop_Data, "m_nNextThinkTick", newNextThink);
 
-			tick += GetGameTickCount() - player[owner].pauseTick;
-			this.explodeTime = tick;
+				tick += GetGameTickCount() - player[owner].pauseTick;
+				this.explodeTime = tick;
+			}
 		}
 	}
 }
@@ -297,6 +345,10 @@ public void OnPluginStart() {
 
 	for (int i = 1; i <= MaxClients; i++) {
 		g_aProjectiles[i] = new ArrayList(sizeof(Projectile));
+
+		if (IsClientInGame(i)) {
+			OnClientConnected(i);
+		}
 	}
 }
 
@@ -305,33 +357,23 @@ public void OnMapStart() {
 	g_iHaloSprite = PrecacheModel("sprites/halo01.vmt", true);
 
 	g_aVPhysicsList.Clear();
-
-	for (int i = 1; i <= MaxClients; i++) {
-		resetValues(i);
-
-		if (isValidClient(i) && CheckCommandAccess(i, "sm_stasis", ADMFLAG_RESERVATION)) {
-			g_hCleanupTimer[i] = CreateTimer(15.0, timerCleanup, GetClientUserId(i), TIMER_REPEAT);
-		}
-	}
 }
 
 public void OnClientConnected(int client) {
 	if (!IsFakeClient(client) && CheckCommandAccess(client, "sm_stasis", ADMFLAG_RESERVATION)) {
-		player[client].client = client;
-
-		g_hCleanupTimer[client] = CreateTimer(15.0, timerCleanup, GetClientUserId(client), TIMER_REPEAT);
+		player[client] = defaultPlayer(client);
 	}
 }
 
 public void OnClientDisconnect(int client) {
-	delete g_hCleanupTimer[client];
+	g_aProjectiles[client].Clear();
 }
 
 public void eventPlayerStatusChange(Event event, const char[] name, bool dontBroadcast) {
 	int client = GetClientOfUserId(event.GetInt("userid"));
-
-	if (client && !IsFakeClient(client) && CheckCommandAccess(client, "sm_stasis", ADMFLAG_RESERVATION)) {
-		resetValues(client);
+	if (isValidClient(client) && CheckCommandAccess(client, "sm_stasis", ADMFLAG_RESERVATION)) {
+		g_aProjectiles[client].Clear();
+		player[client] = defaultPlayer(client);
 	}
 }
 
@@ -347,7 +389,7 @@ public void OnPluginEnd() {
 public void OnEntityCreated(int entity, const char[] classname) {
 	if (StrContains(classname, "tf_projectile") != -1) {
 		DataPack dp = new DataPack();
-		dp.WriteCell(entity);
+		dp.WriteCell(EntIndexToEntRef(entity));
 		dp.WriteString(classname);
 		dp.Reset();
 
@@ -356,10 +398,22 @@ public void OnEntityCreated(int entity, const char[] classname) {
 }
 
 void frameProjectileSpawn(DataPack dp) {
-	int entity = dp.ReadCell();
+	int entity = EntRefToEntIndex(dp.ReadCell());
+	if (entity <= MaxClients) {
+		delete dp;
+		return;
+	}
 
 	Projectile projectile;
-	if (!projectile.setEntity(entity) || !projectile.findOwner() || !CheckCommandAccess(projectile.owner, "sm_stasis", ADMFLAG_RESERVATION)) {
+
+	int owner = getEntityOwner(entity);
+	if (!projectile.setOwner(owner)) {
+		delete dp;
+		return;
+	}
+	
+	// this probably wont ever return false, entity has already been verified, but whatever.
+	if (!projectile.setEntity(entity)) {
 		delete dp;
 		return;
 	}
@@ -368,24 +422,75 @@ void frameProjectileSpawn(DataPack dp) {
 	dp.ReadString(classname, sizeof(classname));
 	delete dp;
 
+	bool isVPhysics = false;
 	if (StrEqual(classname, "tf_projectile_pipe") || StrContains(classname, "projectile_jar") != -1) {
 		// Get tick count of spawn - used to perform calculations for lifespan
 		projectile.explodeTime = GetGameTickCount();
-		projectile.addToVPhysicsList();
+		isVPhysics = true;
 	}
 	else if (StrEqual(classname, "tf_projectile_pipe_remote")) {
-		projectile.addToVPhysicsList();
+		isVPhysics = true;
 	}
 
-	projectile.save();
+	if (isClientInStasis(owner) || isVPhysics) {
+		ArrayList al = new ArrayList(sizeof(Projectile));
+		al.PushArray(projectile);
+		al.Push(owner);
+		al.Push(isVPhysics);
+
+		// if vphysics, wait two frames, otherwise one frame
+		RequestFrame(isVPhysics ? frameOne : frameTwo, al);
+	}
+	else {
+		g_aProjectiles[owner].PushArray(projectile);
+	}
+}
+
+public void frameOne(ArrayList al) {
+	RequestFrame(frameTwo, al);
+}
+
+public void frameTwo(ArrayList al) {
+	Projectile p;
+	al.GetArray(0, p);
+	int owner = al.Get(1);
+	bool isVPhysics = al.Get(2);
+	delete al;
+
+	if (!p.getEntity()) {
+		return;
+	}
+
+	if (isClientInStasis(owner)) {
+		p.freeze();
+		p.displayLasers();
+	}
+
+	if (isVPhysics) {
+		g_aVPhysicsList.PushArray(p);
+	}
+
+	g_aProjectiles[owner].PushArray(p);
 }
 
 public void OnEntityDestroyed(int entity) {
-	Projectile projectile;
-	projectile = findProjectile(entity);
+	if (entity <= MaxClients || entity > MAX_NET_ENTS) {
+		return;
+	}
 
-	if (!projectile.isNull) {
-		projectile.remove();
+	int entRef = EntIndexToEntRef(entity);
+
+	int index = g_aVPhysicsList.FindValue(entRef);
+	if (index != -1) {
+		g_aVPhysicsList.Erase(index);
+	}
+
+	int owner = getEntityOwner(entity);
+	if (isValidOwner(owner)) {
+		index = g_aProjectiles[owner].FindValue(entRef);
+		if (index != -1) {
+			g_aProjectiles[owner].Erase(index);
+		}
 	}
 }
 
@@ -408,68 +513,7 @@ public Action cmdStasis(int client, int args) {
 
 // ================= Internal Functions
 
-// -- Timer
-
-Action timerCleanup(Handle timer, int userid) {
-	// Cleanup to check for valid projectiles
-	int client = GetClientOfUserId(userid);
-
-	if (!client) {
-		return Plugin_Stop;
-	}
-
-	if (g_aProjectiles[client].Length) {
-		for (int i = 0; i < g_aProjectiles[client].Length; i++) {
-			Projectile projectile;
-			g_aProjectiles[client].GetArray(i, projectile, sizeof(Projectile));
-
-			int entity = projectile.entity;
-
-			if (!IsValidEntity(entity)) {
-				g_aProjectiles[client].Erase(i--);
-				continue;
-			}
-
-			char classname[32];
-			GetEntityClassname(entity, classname, sizeof(classname));
-
-			if (StrContains(classname, "tf_projectile") == -1) {
-				g_aProjectiles[client].Erase(i--);
-			}
-		}
-	}
-
-	if (g_aVPhysicsList.Length) {
-		for (int i = 0; i < g_aVPhysicsList.Length; i++) {
-			Projectile projectile;
-			g_aVPhysicsList.GetArray(i, projectile, sizeof(Projectile));
-
-			int entity = projectile.entity;
-
-			if (!IsValidEntity(entity)) {
-				g_aVPhysicsList.Erase(i--);
-				continue;
-			}
-
-			char classname[32];
-			GetEntityClassname(entity, classname, sizeof(classname));
-
-			if (StrContains(classname, "tf_projectile") == -1) {
-				g_aVPhysicsList.Erase(i--);
-			}
-		}		
-	}
-
-	return Plugin_Continue;
-}
-
 // -- Client
-
-void resetValues(int client) {
-	g_aProjectiles[client].Clear();
-	player[client] = DEFAULTSTATUS;
-	player[client].client = client;
-}
 
 bool isValidClient(int client) {
 	return ((0 < client <= MaxClients) && IsClientInGame(client) && !IsFakeClient(client));
@@ -486,18 +530,18 @@ bool isClientInStasis(int client) {
 // -- Projectiles
 
 void freezeProjectiles(int client) {
+	if (!isValidClient(client)) {
+		return;
+	}
+
 	int count = g_aProjectiles[client].Length;
 	if (!count) {
 		return;
 	}
+
 	for (int i = 0; i < count; i++) {
 		Projectile projectile;
 		g_aProjectiles[client].GetArray(i, projectile, sizeof(Projectile));
-
-		if (!IsValidEntity(projectile.entity)) {
-			projectile.remove();
-			return;
-		}
 
 		projectile.freeze();
 		projectile.displayLasers();
@@ -505,8 +549,6 @@ void freezeProjectiles(int client) {
 		// Variables changed - Update in array
 		g_aProjectiles[client].SetArray(i, projectile, sizeof(Projectile));
 	}
-
-	player[client].pauseTick = GetGameTickCount();
 }
 
 void unfreezeProjectiles(int client) {
@@ -519,11 +561,6 @@ void unfreezeProjectiles(int client) {
 		Projectile projectile;
 		g_aProjectiles[client].GetArray(i, projectile, sizeof(Projectile));
 
-		if (!IsValidEntity(projectile.entity)) {
-			projectile.remove();
-			return;
-		}
-
 		projectile.unfreeze();
 
 		// Variables changed - Update in array
@@ -534,7 +571,7 @@ void unfreezeProjectiles(int client) {
 // -- Entity
 
 int getEntityOwner(int entity) {
-	if (!IsValidEntity(entity)) {
+	if (entity <= MaxClients || !IsValidEntity(entity)) {
 		return 0;
 	}
 
@@ -558,31 +595,6 @@ int getEntityOwner(int entity) {
 	return owner;
 }
 
-Projectile[] findProjectile(int entity) {
-	Projectile projectile;
-	int owner = getEntityOwner(entity);
-	if (!isValidOwner(owner)) {
-		projectile.isNull = true;
-		return projectile;
-	}
-
-	int len;
-	if (!(len = g_aProjectiles[owner].Length)) {
-		projectile.isNull = true;
-		return projectile;
-	}
-	
-	for (int i = 0; i < len; i++) {
-		g_aProjectiles[owner].GetArray(i, projectile, sizeof(projectile));
-		if (projectile.owner == owner) {
-			return projectile;
-		}
-	}
-
-	projectile.isNull = true;
-	return projectile;
-}
-
 // -- Misc/Stocks
 
 void doLaserBeam(int client, float start[3], float end[3], int r = 255, int g = 255, int b = 255, int a = 255) {
@@ -597,7 +609,6 @@ void doLaserBeam(int client, float start[3], float end[3], int r = 255, int g = 
 
 int getActiveWeapon(int client) {
 	int weapon = GetEntPropEnt(client, Prop_Data, "m_hActiveWeapon");
-
 	if (!IsValidEntity(weapon)) {
 		return INVALID_ENT_REFERENCE;
 	}
@@ -607,7 +618,6 @@ int getActiveWeapon(int client) {
 
 bool getClientAbsVelocity(int client, float velocity[3]) {
 	static int offset = -1;
-	
 	if (offset == -1 && (offset = FindDataMapInfo(client, "m_vecAbsVelocity")) == -1) {
 		velocity = NULL_VECTOR;
 		return false;
@@ -629,12 +639,13 @@ public void OnGameFrame() {
 		Projectile projectile;
 		g_aVPhysicsList.GetArray(i, projectile, sizeof(Projectile));
 
-		int entity = projectile.entity;
-		int owner = projectile.owner;
+		int owner = projectile.getOwner();
 
-		if (!IsValidEntity(entity) || !isValidOwner(owner) || !isClientInStasis(owner)) {
+		if (!isClientInStasis(owner)) {
 			continue;
 		}
+
+		int entity = projectile.getEntity();
 
 		if (projectile.explodeTime) {
 			int tick = GetEntProp(entity, Prop_Data, "m_nNextThinkTick");
@@ -647,7 +658,7 @@ public void OnGameFrame() {
 	}
 }
 
-public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2]) {
+public Action OnPlayerRunCmd(int client, int &buttons) {
 	if (!isClientInStasis(client)) {
 		return Plugin_Continue;
 	}

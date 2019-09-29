@@ -1,90 +1,83 @@
 #include <sourcemod>
 #include <sdkhooks>
+#include <sdktools>
 
-ArrayList g_aCalculate;
-StringMap g_smProjectileLastTickOrigin;
+#define MAX_NET_ENTS 2048
 
-public void OnPluginStart() {
-	g_aCalculate = new ArrayList(6);
-	g_smProjectileLastTickOrigin = new StringMap();
+public Plugin myinfo = {
+	name = "VPhysics CalcVel",
+	author = "JoinedSenses",
+	description = "Calculates velocity of vphysics and sets m_vecAbsVelocity",
+	version = "1.0.0",
+	url = "http://github.com/JoinedSenses"
+};
 
-	RegAdminCmd("sm_countcalc", cmdCount, ADMFLAG_ROOT);
+enum struct Projectile {
+	int entRef;
+	float origin[3];
 }
 
-public Action cmdCount(int client, int args) {
-	PrintToChat(client, "%i %i", g_aCalculate.Length, g_smProjectileLastTickOrigin.Size);
+ArrayList g_aProjectiles;
+
+public void OnPluginStart() {
+	g_aProjectiles = new ArrayList(sizeof(Projectile));
 }
 
 public void OnMapStart() {
-	g_aCalculate.Clear();
-	g_smProjectileLastTickOrigin.Clear();
+	g_aProjectiles.Clear();
 }
 
 public void OnEntityCreated(int entity, const char[] classname) {
-	RequestFrame(frameSpawn, entity);
+	if (entity <= MaxClients || entity > MAX_NET_ENTS) {
+		return;
+	}
+
+	RequestFrame(frameSpawn, EntIndexToEntRef(entity));
 }
 
 public void OnEntityDestroyed(int entity) {
-	int index = -1
-	if ((index = g_aCalculate.FindValue(entity)) != -1) {
-		g_aCalculate.Erase(index);
-		char sEntity[5];
-		Format(sEntity, sizeof(sEntity), "%i", entity);
-		g_smProjectileLastTickOrigin.Remove(sEntity);
-	}
-}
-
-void frameSpawn(int entity) {
-	if (!IsValidEntity(entity) || GetEntityMoveType(entity) != MOVETYPE_VPHYSICS || !HasEntProp(entity, Prop_Send, "m_vecOrigin")) {
+	if (entity <= MaxClients) {
 		return;
 	}
 
-	PerformCalculations(entity);
-
-	char sEntity[5];
-	Format(sEntity, sizeof(sEntity), "%i", entity);
-
-	float origin[3];
-	GetEntPropVector(entity, Prop_Send, "m_vecOrigin", origin);
-
-	g_smProjectileLastTickOrigin.SetArray(sEntity, origin, sizeof(origin));
+	int index = g_aProjectiles.FindValue(EntIndexToEntRef(entity));
+	if (index != -1) {
+		g_aProjectiles.Erase(index);
+	}
 }
 
-void PerformCalculations(int entity) {
-	g_aCalculate.Push(entity);
+void frameSpawn(int entRef) {
+	int entity = EntRefToEntIndex(entRef);
+	if (entity <= MaxClients || GetEntityMoveType(entity) != MOVETYPE_VPHYSICS || !HasEntProp(entity, Prop_Send, "m_vecOrigin")) {
+		return;
+	}
+
+	Projectile p;
+	p.entRef = EntIndexToEntRef(entity);
+	GetEntPropVector(entity, Prop_Send, "m_vecOrigin", p.origin);
+
+	g_aProjectiles.PushArray(p);
 }
 
 public void OnGameFrame() {
-	if (g_aCalculate.Length < 1) {
-		return;
-	}
-	for (int i = 0; i < g_aCalculate.Length; i++) {
-		int entity = g_aCalculate.Get(i);
-
-		if (!IsValidEdict(entity)) {
+	Projectile p;
+	int len = g_aProjectiles.Length;
+	for (int i = 0; i < len; i++) {
+		g_aProjectiles.GetArray(i, p);
+		int entity = EntRefToEntIndex(p.entRef);
+		if (entity <= MaxClients) {
 			continue;
 		}
-
-		if (!HasEntProp(entity, Prop_Send, "m_vecOrigin")) {
-			g_aCalculate.Erase(i--);
-			continue;
-		}
-
-		char sEntity[5];
-		Format(sEntity, sizeof(sEntity), "%i", entity);
-
-		float originOld[3];
-		g_smProjectileLastTickOrigin.GetArray(sEntity, originOld, sizeof(originOld));
 
 		float origin[3];
 		GetEntPropVector(entity, Prop_Send, "m_vecOrigin", origin);
 
 		float velocity[3];
-		GetVelocity(originOld, origin, GetTickInterval(), velocity);
-
+		GetVelocity(p.origin, origin, GetGameFrameTime(), velocity);
 		SetEntPropVector(entity, Prop_Data, "m_vecAbsVelocity", velocity);
 
-		g_smProjectileLastTickOrigin.SetArray(sEntity, origin, sizeof(origin));
+		p.origin = origin;
+		g_aProjectiles.SetArray(i, p);
 	}
 }
 
