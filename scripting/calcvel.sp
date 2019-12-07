@@ -8,7 +8,7 @@ public Plugin myinfo = {
 	name = "VPhysics CalcVel",
 	author = "JoinedSenses",
 	description = "Calculates velocity of vphysics and sets m_vecAbsVelocity",
-	version = "1.0.0",
+	version = "1.0.1",
 	url = "http://github.com/JoinedSenses"
 };
 
@@ -18,9 +18,11 @@ enum struct Projectile {
 }
 
 ArrayList g_aProjectiles;
+float g_fTickInterval;
 
 public void OnPluginStart() {
 	g_aProjectiles = new ArrayList(sizeof(Projectile));
+	g_fTickInterval = GetTickInterval();
 }
 
 public void OnMapStart() {
@@ -73,7 +75,7 @@ public void OnGameFrame() {
 		GetEntPropVector(entity, Prop_Send, "m_vecOrigin", origin);
 
 		float velocity[3];
-		GetVelocity(p.origin, origin, GetGameFrameTime(), velocity);
+		GetVelocity(p.origin, origin, g_fTickInterval, velocity);
 		SetEntPropVector(entity, Prop_Data, "m_vecAbsVelocity", velocity);
 
 		p.origin = origin;
