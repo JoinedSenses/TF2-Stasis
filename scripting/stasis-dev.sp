@@ -12,7 +12,7 @@
 
 #define PIPE_TICKS_UNTIL_EXPLODE 145
 #define SLOTCOUNT 3
-#define PLUGIN_VERSION "2.0.0-dev"
+#define PLUGIN_VERSION "2.0.1-dev"
 #define PLUGIN_DESCRIPTION "Stasis: A state which does not change"
 #define MAX_NET_ENTS 2048
 
@@ -112,7 +112,7 @@ enum struct Player {
 		for (int slot = 0; slot < SLOTCOUNT; slot++) {
 			int weapon = GetPlayerWeaponSlot(client, slot);
 			if (!IsValidEntity(weapon)) {
-				return;
+				continue;
 			}
 
 			if (HasEntProp(weapon, Prop_Send, "m_flNextPrimaryAttack")) {
@@ -136,7 +136,7 @@ enum struct Player {
 		for (int slot = 0; slot < SLOTCOUNT; slot++) {
 			int weapon = GetPlayerWeaponSlot(client, slot);
 			if (!IsValidEntity(weapon)) {
-				return;
+				continue;
 			}
 			
 			if (HasEntProp(weapon, Prop_Send, "m_flNextPrimaryAttack")) {
@@ -214,8 +214,13 @@ enum struct Projectile {
 	}
 
 	bool setEntity(int entity) {
-		if (MaxClients < entity <= MAX_NET_ENTS && IsValidEntity(entity)) {
-			this.entRef = EntIndexToEntRef(entity);
+		if (IsValidEntity(entity)) {
+			if (entity < -1 || entity > MAX_NET_ENTS) {
+				this.entRef = entity;
+			}
+			else {
+				this.entRef = EntIndexToEntRef(entity);
+			}
 			return true;
 		}
 		return false;
