@@ -12,7 +12,7 @@
 
 #define PIPE_TICKS_UNTIL_EXPLODE 145
 #define SLOTCOUNT 3
-#define PLUGIN_VERSION "2.0.1-dev"
+#define PLUGIN_VERSION "2.0.2-dev"
 #define PLUGIN_DESCRIPTION "Stasis: A state which does not change"
 #define MAX_NET_ENTS 2048
 
@@ -215,7 +215,7 @@ enum struct Projectile {
 
 	bool setEntity(int entity) {
 		if (IsValidEntity(entity)) {
-			if (entity < -1 || entity > MAX_NET_ENTS) {
+			if (entity & (1 << 31)) {
 				this.entRef = entity;
 			}
 			else {
@@ -239,7 +239,7 @@ enum struct Projectile {
 	}
 
 	void save() {
-		if (this.getEntity()) {
+		if (this.getEntity() > 0) {
 			int owner = this.getOwner();	
 			if (isValidOwner(owner)) {
 				g_aProjectiles[owner].PushArray(this);
@@ -248,14 +248,14 @@ enum struct Projectile {
 	}
 
 	void addToVPhysicsList() {
-		if (this.getEntity()) {
+		if (this.getEntity() > 0) {
 			g_aVPhysicsList.PushArray(this);
 		}
 	}
 
 	void freeze() {
 		int entity = this.getEntity();
-		if (!entity) {
+		if (entity < 1) {
 			return;
 		}
 
@@ -270,7 +270,7 @@ enum struct Projectile {
 
 	void unfreeze() {
 		int entity = this.getEntity();
-		if (!entity) {
+		if (entity < 1) {
 			return;
 		}
 
@@ -313,7 +313,7 @@ enum struct Projectile {
 
 	void updateExplodeTime() {
 		int entity = this.getEntity();
-		if (!entity) {
+		if (entity < 1) {
 			return;
 		}
 
@@ -384,7 +384,7 @@ public void eventPlayerStatusChange(Event event, const char[] name, bool dontBro
 
 public void OnPluginEnd() {
 	for (int i = 1; i <= MaxClients; i++) {
-		if (isValidClient(i) && isClientInStasis(i)) {
+		if (IsClientInGame(i) && isClientInStasis(i)) {
 			player[i].disableStasis();
 			PrintToChat(i, "Stasis ending. Plugin reloading");
 		}
@@ -462,7 +462,7 @@ public void frameTwo(ArrayList al) {
 	bool isVPhysics = al.Get(2);
 	delete al;
 
-	if (!p.getEntity()) {
+	if (p.getEntity() < 1) {
 		return;
 	}
 
