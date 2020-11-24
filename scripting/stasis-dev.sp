@@ -12,7 +12,7 @@
 
 #define PIPE_TICKS_UNTIL_EXPLODE 145
 #define SLOTCOUNT 3
-#define PLUGIN_VERSION "2.0.2-dev"
+#define PLUGIN_VERSION "2.0.3-dev"
 #define PLUGIN_DESCRIPTION "Stasis: A state which does not change"
 #define MAX_NET_ENTS 2048
 
@@ -141,18 +141,18 @@ enum struct Player {
 			
 			if (HasEntProp(weapon, Prop_Send, "m_flNextPrimaryAttack")) {
 				SetEntPropFloat(
-					  weapon
-					, Prop_Send
-					, "m_flNextPrimaryAttack"
-					, this.nextAttackPrimary[slot]+(GetGameTime()-this.stasisTick)
+					weapon,
+					Prop_Send,
+					"m_flNextPrimaryAttack",
+					this.nextAttackPrimary[slot]+(GetGameTime()-this.stasisTick)
 				);
 			}
 			if (HasEntProp(weapon, Prop_Send, "m_flNextSecondaryAttack")) {
 				SetEntPropFloat(
-					  weapon
-					, Prop_Send
-					, "m_flNextSecondaryAttack"
-					, this.nextAttackSecondary[slot]+(GetGameTime()-this.stasisTick)
+					  weapon,
+					Prop_Send,
+					"m_flNextSecondaryAttack",
+					this.nextAttackSecondary[slot]+(GetGameTime()-this.stasisTick)
 				);	
 			}
 		}
@@ -337,7 +337,12 @@ enum struct Projectile {
 // ================= SM API
 
 public void OnPluginStart() {
-	CreateConVar("sm_stasis_version", PLUGIN_VERSION, PLUGIN_DESCRIPTION, FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD).SetString(PLUGIN_VERSION);
+	CreateConVar(
+		"sm_stasis_version",
+		PLUGIN_VERSION,
+		PLUGIN_DESCRIPTION,
+		FCVAR_SPONLY|FCVAR_NOTIFY|FCVAR_DONTRECORD
+	).SetString(PLUGIN_VERSION);
 
 	RegAdminCmd("sm_stasis", cmdStasis, ADMFLAG_RESERVATION);
 
