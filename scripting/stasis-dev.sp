@@ -12,9 +12,11 @@
 
 #define PIPE_TICKS_UNTIL_EXPLODE 145
 #define SLOTCOUNT 3
-#define PLUGIN_VERSION "2.0.3-dev"
+#define PLUGIN_VERSION "2.0.4-dev"
 #define PLUGIN_DESCRIPTION "Stasis: A state which does not change"
 #define MAX_NET_ENTS 2048
+
+#define A_VERY_LARGE_NUMBER 999999999.0
 
 public Plugin myinfo = {
 	name = "Stasis",
@@ -50,11 +52,11 @@ enum struct Player {
 	}
 
 	void toggleStasis() {
-		if (!this.isInStasis) {
-			this.enableStasis();
+		if (this.isInStasis) {
+			this.disableStasis();
 		}
 		else {
-			this.disableStasis();
+			this.enableStasis();
 		}
 	}
 
@@ -117,12 +119,12 @@ enum struct Player {
 
 			if (HasEntProp(weapon, Prop_Send, "m_flNextPrimaryAttack")) {
 				this.nextAttackPrimary[slot] = GetEntPropFloat(weapon, Prop_Send, "m_flNextPrimaryAttack");
-				SetEntPropFloat(weapon, Prop_Send, "m_flNextPrimaryAttack", 999999999.0);
+				SetEntPropFloat(weapon, Prop_Send, "m_flNextPrimaryAttack", A_VERY_LARGE_NUMBER);
 			}
 
 			if (HasEntProp(weapon, Prop_Send, "m_flNextSecondaryAttack")) {
 				this.nextAttackSecondary[slot] = GetEntPropFloat(weapon, Prop_Send, "m_flNextSecondaryAttack");
-				SetEntPropFloat(weapon, Prop_Send, "m_flNextSecondaryAttack", 999999999.0);
+				SetEntPropFloat(weapon, Prop_Send, "m_flNextSecondaryAttack", A_VERY_LARGE_NUMBER);
 			}
 		}
 	}
@@ -194,6 +196,8 @@ enum struct Player {
 
 Player player[MAXPLAYERS+1];
 
+// For spcomp 1.11+:
+//Player defaultPlayer(int client)
 Player[] defaultPlayer(int client) {
 	Player p;
 	p.set(client);
@@ -241,7 +245,7 @@ enum struct Projectile {
 	void save() {
 		if (this.getEntity() > 0) {
 			int owner = this.getOwner();	
-			if (isValidOwner(owner)) {
+			if (0 < owner <= MaxClients) {
 				g_aProjectiles[owner].PushArray(this);
 			}
 		}
@@ -283,7 +287,7 @@ enum struct Projectile {
 
 	void displayLasers() {
 		int owner = this.getOwner();
-		if (!isValidOwner(owner)) {
+		if (owner < 1 || owner > MaxClients) {
 			return;
 		}
 
@@ -496,7 +500,7 @@ public void OnEntityDestroyed(int entity) {
 	}
 
 	int owner = getEntityOwner(entity);
-	if (isValidOwner(owner)) {
+	if (0 < owner <= MaxClients) {
 		index = g_aProjectiles[owner].FindValue(entRef);
 		if (index != -1) {
 			g_aProjectiles[owner].Erase(index);
@@ -527,10 +531,6 @@ public Action cmdStasis(int client, int args) {
 
 bool isValidClient(int client) {
 	return ((0 < client <= MaxClients) && IsClientInGame(client) && !IsFakeClient(client));
-}
-
-bool isValidOwner(int owner) {
-	return 0 < owner <= MaxClients;
 }
 
 bool isClientInStasis(int client) {
@@ -619,11 +619,7 @@ void doLaserBeam(int client, float start[3], float end[3], int r = 255, int g = 
 
 int getActiveWeapon(int client) {
 	int weapon = GetEntPropEnt(client, Prop_Data, "m_hActiveWeapon");
-	if (!IsValidEntity(weapon)) {
-		return INVALID_ENT_REFERENCE;
-	}
-
-	return weapon;
+	return IsValidEntity(weapon) ? weapon : -1;
 }
 
 bool getClientAbsVelocity(int client, float velocity[3]) {
@@ -641,9 +637,6 @@ bool getClientAbsVelocity(int client, float velocity[3]) {
 
 public void OnGameFrame() {
 	int len = g_aVPhysicsList.Length;
-	if (!len) {
-		return;
-	}
 	
 	for (int i = 0; i < len; i++) {
 		Projectile projectile;
@@ -681,7 +674,7 @@ public Action OnPlayerRunCmd(int client, int &buttons) {
 		}
 		case TFClass_DemoMan: {
 			int playerWeapon = getActiveWeapon(client);
-			if (playerWeapon == INVALID_ENT_REFERENCE) {
+			if (playerWeapon == -1) {
 				return Plugin_Continue;
 			}
 
@@ -712,7 +705,7 @@ public Action OnPlayerRunCmd(int client, int &buttons) {
 		}
 		case TFClass_Sniper: {
 			int playerWeapon = getActiveWeapon(client);
-			if (playerWeapon == INVALID_ENT_REFERENCE) {
+			if (playerWeapon == -1) {
 				return Plugin_Continue;
 			}
 
